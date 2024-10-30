@@ -7,39 +7,44 @@ use ReflectionFunction;
 use ReflectionException;
 use ReflectionNamedType;
 use ReflectionParameter;
-use PHPShots\Common\BindingResolutionException;
-use PHPShots\Common\CircularDependencyException;
+use PHPShots\Common\Exceptions\BindingResolutionException;
+use PHPShots\Common\Exceptions\CircularDependencyException;
 
+/**
+ * Trait Build
+ *
+ * A trait to handle the instantiation of class dependencies through reflection and parameter overrides,
+ * ensuring flexible dependency injection for instantiable classes.
+ * 
+ * @version 0.1.1
+ */
 trait Build
 {
-
     /**
-     * The parameter override stack.
+     * Stack of parameter overrides for dependency resolution.
      *
      * @var array[]
      */
     protected $with = [];
 
     /**
-     * Determine if the given dependency has a parameter override.
+     * Determine if a given dependency has a parameter override.
      *
      * @param  ReflectionParameter  $dependency
      * @return bool
      */
-    protected function hasParameterOverride($dependency)
+    protected function hasParameterOverride(ReflectionParameter $dependency): bool
     {
-        return array_key_exists(
-            $dependency->name, $this->getLastParameterOverride()
-        );
+        return array_key_exists($dependency->name, $this->getLastParameterOverride());
     }
 
     /**
      * Get a parameter override for a dependency.
      *
-     * @param  \ReflectionParameter  $dependency
+     * @param  ReflectionParameter  $dependency
      * @return mixed
      */
-    protected function getParameterOverride($dependency)
+    protected function getParameterOverride(ReflectionParameter $dependency): mixed
     {
         return $this->getLastParameterOverride()[$dependency->name];
     }
@@ -49,57 +54,46 @@ trait Build
      *
      * @return array
      */
-    protected function getLastParameterOverride()
+    protected function getLastParameterOverride(): array
     {
         return count($this->with) ? end($this->with) : [];
     }
 
-
-     /**
-     * Get the class name for the given callback, if one can be determined.
+    /**
+     * Get the class name for a callable callback, if determinable.
      *
      * @param  callable|string  $callback
      * @return string|false
      */
-    protected function getClassForCallable($callback)
+    protected function getClassForCallable(callable|string $callback): string|false
     {
-        if (
-            is_callable($callback) &&
-            !($reflector = new ReflectionFunction($callback(...)))->isAnonymous()
-        ) {
+        if (is_callable($callback) && !($reflector = new ReflectionFunction($callback(...)))->isAnonymous()) {
             return $reflector->getClosureScopeClass()->name ?? false;
         }
-
         return false;
     }
 
-
     /**
-     * Determine if the given concrete is buildable.
+     * Determine if a given concrete is buildable.
      *
-     * @param  mixed  $concrete
+     * @param  mixed   $concrete
      * @param  string  $abstract
      * @return bool
      */
-    protected function isBuildable($concrete, $abstract)
+    protected function isBuildable(mixed $concrete, string $abstract): bool
     {
         return $concrete === $abstract || $concrete instanceof Closure;
     }
 
-     /**
-     * Instantiate a concrete instance of the given type.
+    /**
+     * Instantiate a concrete instance of a given type.
      *
      * @param  Closure|string  $concrete
      * @return mixed
-     *
-     * @throws BindingResolutionException
-     * @throws CircularDependencyException
+     * @throws BindingResolutionException|CircularDependencyException
      */
-    public function build(Closure|string $concrete)
+    public function build(Closure|string $concrete): mixed
     {
-        // If the concrete type is actually a Closure, we will just execute it and
-        // hand back the results of the functions, which allows functions to be
-        // used as resolvers for more fine-tuned resolution of these objects.
         if ($concrete instanceof Closure) {
             return $concrete($this, $this->getLastParameterOverride());
         }
@@ -110,94 +104,64 @@ trait Build
             throw new BindingResolutionException("Target class [$concrete] does not exist.", 0, $e);
         }
 
-        // If the type is not instantiable, the developer is attempting to resolve
-        // an abstract type such as an Interface or Abstract Class and there is
-        // no binding registered for the abstractions so we need to bail out.
         if (!$reflector->isInstantiable()) {
             return $this->notInstantiable($concrete);
         }
 
         $this->buildStack[] = $concrete;
-
         $constructor = $reflector->getConstructor();
 
-        // If there are no constructors, that means there are no dependencies then
-        // we can just resolve the instances of the objects right away, without
-        // resolving any other types or dependencies out of these containers.
         if (is_null($constructor)) {
             array_pop($this->buildStack);
-
             return new $concrete;
         }
 
-        $dependencies = $constructor->getParameters();
-
-        // Once we have all the constructor's parameters we can create each of the
-        // dependency instances and then use the reflection instances to make a
-        // new instance of this class, injecting the created dependencies in.
         try {
-            $instances = $this->resolveDependencies($dependencies);
+            $instances = $this->resolveDependencies($constructor->getParameters());
         } catch (BindingResolutionException $e) {
             array_pop($this->buildStack);
-
             throw $e;
         }
 
         array_pop($this->buildStack);
-
         return $reflector->newInstanceArgs($instances);
     }
 
     /**
-     * Resolve all of the dependencies from the ReflectionParameters.
+     * Resolve all dependencies for a given array of ReflectionParameters.
      *
-     * @param  \ReflectionParameter[]  $dependencies
+     * @param  ReflectionParameter[]  $dependencies
      * @return array
-     *
      * @throws BindingResolutionException
      */
-    protected function resolveDependencies(array $dependencies)
+    protected function resolveDependencies(array $dependencies): array
     {
         $results = [];
 
         foreach ($dependencies as $dependency) {
-            // If the dependency has an override for this particular build we will use
-            // that instead as the value. Otherwise, we will continue with this run
-            // of resolutions and let reflection attempt to determine the result.
             if ($this->hasParameterOverride($dependency)) {
                 $results[] = $this->getParameterOverride($dependency);
-
                 continue;
             }
 
-            // If the class is null, it means the dependency is a string or some other
-            // primitive type which we can not resolve since it is not a class and
-            // we will just bomb out with an error since we have no-where to go.
             $result = is_null(static::getParameterClassName($dependency))
                 ? $this->resolvePrimitive($dependency)
                 : $this->resolveClass($dependency);
 
-            if ($dependency->isVariadic()) {
-                $results = array_merge($results, $result);
-            } else {
-                $results[] = $result;
-            }
+            $results = $dependency->isVariadic() ? array_merge($results, $result) : array_merge($results, [$result]);
         }
 
         return $results;
-    } 
-
-     
+    }
 
     /**
-     * Resolve a non-class hinted primitive dependency.
+     * Resolve a primitive dependency.
      *
-     * @param  \ReflectionParameter  $parameter
+     * @param  ReflectionParameter  $parameter
      * @return mixed
-     *
      * @throws BindingResolutionException
      */
-    protected function resolvePrimitive(ReflectionParameter $parameter)
+    protected function resolvePrimitive(ReflectionParameter $parameter): mixed
     {
         if (!is_null($concrete = $this->getContextualConcrete('$' . $parameter->getName()))) {
             return $concrete instanceof Closure ? $concrete($this) : $concrete;
@@ -207,43 +171,24 @@ trait Build
             return $parameter->getDefaultValue();
         }
 
-        if ($parameter->isVariadic()) {
-            return [];
-        }
-
-        $this->unresolvablePrimitive($parameter);
+        return $parameter->isVariadic() ? [] : $this->unresolvablePrimitive($parameter);
     }
 
-     /**
-     * Resolve a class based dependency from the container.
+    /**
+     * Resolve a class-based dependency.
      *
-     * @param  \ReflectionParameter  $parameter
+     * @param  ReflectionParameter  $parameter
      * @return mixed
-     *
      * @throws BindingResolutionException
      */
-    protected function resolveClass(ReflectionParameter $parameter)
+    protected function resolveClass(ReflectionParameter $parameter): mixed
     {
         try {
-            return $parameter->isVariadic()
-                ? $this->resolveVariadicClass($parameter)
-                : $this->make(static::getParameterClassName($parameter));
-        }
-
-        // If we can not resolve the class instance, we will check to see if the value
-        // is optional, and if it is we will return the optional parameter value as
-        // the value of the dependency, similarly to how we do this with scalars.
-        catch (BindingResolutionException $e) {
+            return $parameter->isVariadic() ? $this->resolveVariadicClass($parameter) : $this->make(static::getParameterClassName($parameter));
+        } catch (BindingResolutionException $e) {
             if ($parameter->isDefaultValueAvailable()) {
                 array_pop($this->with);
-
                 return $parameter->getDefaultValue();
-            }
-
-            if ($parameter->isVariadic()) {
-                array_pop($this->with);
-
-                return [];
             }
 
             throw $e;
@@ -251,87 +196,63 @@ trait Build
     }
 
     /**
-     * Resolve a class based variadic dependency from the container.
+     * Resolve a variadic class-based dependency.
      *
-     * @param  \ReflectionParameter  $parameter
+     * @param  ReflectionParameter  $parameter
      * @return mixed
      */
-    protected function resolveVariadicClass(ReflectionParameter $parameter)
+    protected function resolveVariadicClass(ReflectionParameter $parameter): mixed
     {
         $className = static::getParameterClassName($parameter);
-
-        $abstract = $this->getAlias($className);
-
-        if (!is_array($concrete = $this->getContextualConcrete($abstract))) {
-            return $this->make($className);
-        }
-
-        return array_map(fn ($abstract) => $this->resolve($abstract), $concrete);
+        return is_array($concrete = $this->getContextualConcrete($this->getAlias($className)))
+            ? array_map(fn($abstract) => $this->resolve($abstract), $concrete)
+            : $this->make($className);
     }
 
-     /**
-     * Throw an exception that the concrete is not instantiable.
+    /**
+     * Throw an exception for a non-instantiable concrete.
      *
      * @param  string  $concrete
      * @return void
-     *
      * @throws BindingResolutionException
      */
-    protected function notInstantiable($concrete)
+    protected function notInstantiable(string $concrete): void
     {
-        if (!empty($this->buildStack)) {
-            $previous = implode(', ', $this->buildStack);
-
-            $message = "Target [$concrete] is not instantiable while building [$previous].";
-        } else {
-            $message = "Target [$concrete] is not instantiable.";
-        }
+        $message = !empty($this->buildStack)
+            ? "Target [$concrete] is not instantiable while building [" . implode(', ', $this->buildStack) . "]."
+            : "Target [$concrete] is not instantiable.";
 
         throw new BindingResolutionException($message);
     }
 
     /**
-     * Get the class name of the given parameter's type, if possible.
+     * Retrieve the class name of the parameter type if available.
      *
-     * From Reflector::getParameterClassName() in Illuminate\Support.
-     *
-     * @param  \ReflectionParameter  $parameter
+     * @param  ReflectionParameter  $parameter
      * @return string|null
      */
-    protected static function getParameterClassName($parameter)
+    protected static function getParameterClassName(ReflectionParameter $parameter): ?string
     {
         $type = $parameter->getType();
-
-        if (! $type instanceof ReflectionNamedType || $type->isBuiltin()) {
-            return null;
-        }
+        if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) return null;
 
         $name = $type->getName();
-
-        if (! is_null($class = $parameter->getDeclaringClass())) {
-            if ($name === 'self') {
-                return $class->getName();
-            }
-
-            if ($name === 'parent' && $parent = $class->getParentClass()) {
-                return $parent->getName();
-            }
-        }
-
-        return $name;
+        return match ($name) {
+            'self' => $parameter->getDeclaringClass()?->getName(),
+            'parent' => $parameter->getDeclaringClass()?->getParentClass()?->getName(),
+            default => $name
+        };
     }
+
     /**
-     * Throw an exception for an unresolvable primitive.
+     * Throw an exception for an unresolvable primitive dependency.
      *
-     * @param  \ReflectionParameter  $parameter
+     * @param  ReflectionParameter  $parameter
      * @return void
-     *
      * @throws BindingResolutionException
      */
-    protected function unresolvablePrimitive(ReflectionParameter $parameter)
+    protected function unresolvablePrimitive(ReflectionParameter $parameter): void
     {
-        $message = "Unresolvable dependency resolving [$parameter] in class {$parameter->getDeclaringClass()->getName()}";
-
-        throw new BindingResolutionException($message);
+        throw new BindingResolutionException("Unresolvable dependency resolving [$parameter] in class {$parameter->getDeclaringClass()->getName()}.");
     }
 }

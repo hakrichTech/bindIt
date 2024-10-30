@@ -1,6 +1,6 @@
 <?php
 
-namespace PHPShots\Common;
+namespace PHPShots\Common\Interfaces;
 
 interface ContextualBindingBuilderInterface
 {

@@ -5,13 +5,14 @@ namespace PHPShots\Common;
 use Closure;
 use TypeError;
 use PHPShots\Common\TypeAlias;
+use PHPShots\Common\Interfaces\BindItInterface;
 
 /**
  * Class BindIt
  *
  * An abstract class for implementing a dependency injection container.
  * This class allows for binding abstract types to concrete implementations,
- * handling method bindings, and managing shared instances.
+ * handling method bindings, and managing shared store.
  *
  * Version: 0.1.1
  */
@@ -40,11 +41,11 @@ abstract class BindIt extends TypeAlias implements BindItInterface
     
 
     /**
-     * The resolved instances.
+     * The resolved store.
      *
      * @var array<string, mixed>
      */
-    protected $resolvedInstances = [];
+    protected $resolvedStore = [];
 
     /**
      * Register a binding with the container.
@@ -60,7 +61,7 @@ abstract class BindIt extends TypeAlias implements BindItInterface
      */
     public function bind(string $abstract, \Closure|string|null $concrete = null, bool $shared = false): void
     {
-        $this->dropStaleInstances($abstract);
+        $this->dropStore($abstract);
 
         // If no concrete type was given, set it to the abstract type.
         $concrete = $concrete ?? $abstract;
@@ -101,7 +102,7 @@ abstract class BindIt extends TypeAlias implements BindItInterface
      * @param  \Closure|string|null  $concrete
      * @return void
      */
-    public function singletonIf($abstract, $concrete = null)
+    public function singletonIf($abstract, $concrete = null):void
     {
         if (! $this->bound($abstract)) {
             $this->singleton($abstract, $concrete);
@@ -141,21 +142,6 @@ abstract class BindIt extends TypeAlias implements BindItInterface
         if ($this->bound($abstract)) {
             return $this->make($abstract);
         }
-    }
-
-
-    /**
-     * Register a method binding with attributes.
-     *
-     * @param array|string $method
-     * @param Closure $callback
-     * @return void
-     */
-    public function bindMethodWithAttributes($method, Closure $callback): void
-    {
-        $methodKey = $this->parseBindMethod($method);
-        $this->methodBindings[$methodKey] = $callback;
-
     }
 
     /**
@@ -199,7 +185,7 @@ abstract class BindIt extends TypeAlias implements BindItInterface
         return $this->reboundCallbacks[$abstract] ?? [];
     }
 
-     /**
+    /**
      * Check if a binding exists.
      *
      * @param  string  $abstract
@@ -210,19 +196,19 @@ abstract class BindIt extends TypeAlias implements BindItInterface
     public function bound(string $abstract): bool
     {
         return isset($this->bindings[$abstract]) ||
-               isset($this->instances[$abstract]) ||
+               isset($this->store[$abstract]) ||
                $this->isAlias($abstract);
     }
 
     /**
-     * Drop stale instances from the container.
+     * Drop stale store from the container.
      *
      * @param  string  $abstract
      * @return void
      *
      * @version 0.1.1
      */
-    abstract protected function dropStaleInstances(string $abstract): void;
+    abstract protected function dropStore(string $abstract): void;
 
     /**
      * Get the Closure for the binding.

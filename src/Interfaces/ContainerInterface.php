@@ -2,137 +2,185 @@
 
 namespace PHPShots\Common\Interfaces;
 
+use Closure;
+use PHPShots\Common\Exceptions\BindingResolutionException;
+
 /**
  * Interface ContainerInterface
- *
- * Defines the core methods required for dependency injection and instance management
- * within a container, including creating, binding, and retrieving instances.
+ * 
+ * This interface defines the core contract for a service container, responsible for 
+ * managing class dependencies and performing dependency injection. The `ContainerInterface` 
+ * facilitates the binding and resolution of services, allowing for the dynamic and 
+ * contextual instantiation of classes. Key methods include handling singleton instances, 
+ * resolving services with parameters, and managing bindings across different contexts.
+ * 
+ * @version 0.1.1
  */
-interface ContainerInterface
+interface ContainerInterface extends BindItInterface
 {
     /**
-     * Get the globally available instance of the container.
-     *
-     * @return static|null Returns the current instance of the container or null if not set.
+     * Retrieve the globally available instance of the container.
+     * 
+     * @return static The globally shared container instance.
      */
     public static function getInstance();
 
     /**
-     * Set the globally available instance of the container.
-     *
-     * @param ContainerInterface|null $container The container instance to set as globally accessible.
+     * Set the shared instance of the container.
+     * 
+     * @param  ContainerInterface|null  $container
+     * @return ContainerInterface The current instance of the container.
+     */
+    public static function setInstance(?ContainerInterface $container = null): ContainerInterface;
+
+    /**
+     * Remove all stored bindings and instances from the container.
+     * 
+     * This method clears the entire container of bindings and shared instances, 
+     * resetting the container to an empty state.
+     * 
      * @return void
      */
-    public static function setInstance(?ContainerInterface $container = null);
+    public function forgetAllStore(): void;
 
     /**
-     * Resolve and return an instance for the specified type.
-     *
-     * @param string $abstract The abstract type or alias to resolve.
-     * @param array $parameters Parameters to pass for resolution if needed.
-     * @return mixed Returns the resolved instance.
-     * @throws BindingResolutionException If the binding cannot be resolved.
-     */
-    public function make($abstract, array $parameters = []);
-
-    /**
-     * Register a shared instance for the given abstract type.
-     *
-     * @param string $abstract The abstract type to bind the instance to.
-     * @param mixed $instance The instance to register in the container.
-     * @return mixed Returns the registered instance.
-     */
-    public function instance($abstract, $instance);
-
-    /**
-     * Clear all bound instances from the container.
-     *
-     * This method allows for flushing the container of all registered singletons and instances,
-     * useful in testing environments where fresh state is required.
-     *
+     * Remove a specific resolved binding from the container cache.
+     * 
+     * This method deletes a specific binding from the container, allowing it to be
+     * re-bound or re-resolved when needed.
+     * 
+     * @param  string  $abstract  The unique identifier for the binding.
      * @return void
      */
-    public function forgetInstances();
+    public function forgetStore(string $abstract): void;
 
     /**
-     * Remove a specific instance from the container.
-     *
-     * This method allows for the removal of a particular singleton or instance by its abstract type.
-     *
-     * @param string $abstract The abstract type or alias to remove from the container.
+     * Instantiate a concrete instance of the given type.
+     * 
+     * @param  Closure|string  $concrete The concrete type or a Closure to build the instance.
+     * @return mixed The created instance of the specified type.
+     * 
+     * @throws BindingResolutionException If there is an issue resolving dependencies.
+     * @throws CircularDependencyException If a circular dependency is detected.
+     */
+    public function build(Closure|string $concrete): mixed;
+
+    /**
+     * Add a contextual binding to the container.
+     * 
+     * This method sets up a binding for a specific type in a specific context, 
+     * enabling unique implementations based on runtime requirements.
+     * 
+     * @param  string  $concrete The concrete class for the contextual binding.
+     * @param  string  $abstract The abstract type to bind.
+     * @param  Closure|string  $implementation The concrete implementation to use.
      * @return void
      */
-    public function forgetInstance($abstract);
+    public function addContextualBinding(string $concrete, string $abstract, Closure|string $implementation): void;
 
     /**
-     * Clear all registered extenders for the container.
-     *
-     * This is useful when the container’s extensions need to be reset.
-     *
+     * Drop stale bindings and aliases for a specific type.
+     * 
+     * Removes bindings or aliases for a given type, ensuring that it can be re-bound or re-resolved.
+     * 
+     * @param  string  $abstract The identifier of the type to drop.
      * @return void
      */
-    public function forgetExtenders();
+    public function dropStore(string $abstract): void;
 
     /**
-     * Extend a specific binding with additional functionality.
-     *
-     * Allows adding logic to an existing resolved instance or shared binding.
-     *
-     * @param string $abstract The abstract type to extend.
-     * @param \Closure $closure A closure that modifies or extends the instance.
+     * Register an existing instance as shared in the container.
+     * 
+     * This method stores a pre-existing instance in the container, ensuring it is shared 
+     * across future resolutions.
+     * 
+     * @param  string  $abstract The identifier for the shared instance.
+     * @param  mixed   $instance The instance to register as shared.
+     * @return mixed The stored instance.
+     */
+    public function store(string $abstract, $instance): mixed;
+
+    /**
+     * Remove all extender callbacks for a specific type.
+     * 
+     * Clears all registered extenders for a particular type, resetting its instantiation logic.
+     * 
+     * @param  string  $abstract The identifier for the type.
      * @return void
      */
-    public function extend($abstract, \Closure $closure);
+    public function forgetExtenders(string $abstract): void;
 
     /**
-     * Define conditional binding based on a specific context.
-     *
-     * Allows defining bindings based on conditional rules, typically for dependency injection in specific scenarios.
-     *
-     * @param string $concrete The class or interface that should apply in the given context.
-     * @return \PHPShots\Common\Interfaces\ContextualBindingBuilderInterface
+     * Extend an abstract type in the container with a closure.
+     * 
+     * Adds an extender to modify the resolution process for a specific abstract type.
+     * 
+     * @param  string   $abstract The identifier for the abstract type.
+     * @param  Closure  $closure A closure to modify the resolution process.
+     * @return void
      */
-    public function when($concrete);
+    public function extend(string $abstract, Closure $closure): void;
 
     /**
-     * Determine if a binding for the abstract type exists.
-     *
-     * Checks if a particular type or alias has been bound in the container.
-     *
-     * @param string $abstract The abstract type to check.
-     * @return bool Returns true if the binding exists, false otherwise.
+     * Define a contextual binding for a concrete implementation.
+     * 
+     * Specifies a binding that applies only in a certain context, determined by the provided type.
+     * 
+     * @param  array|string  $concrete The concrete type or array of types to apply the binding.
+     * @return ContextualBindingBuilderInterface A builder for further contextual binding configuration.
      */
-    public function has($abstract);
+    public function when(array|string $concrete): ContextualBindingBuilderInterface;
 
     /**
-     * Determine if a particular abstract type is registered as a singleton.
-     *
-     * Checks if the binding is marked as shared or singleton within the container.
-     *
-     * @param string $abstract The abstract type to check.
-     * @return bool Returns true if the binding is a singleton, false otherwise.
+     * Determine if a given item is present in the container.
+     * 
+     * Checks if the specified item has been bound or registered within the container.
+     * 
+     * @param  string  $id The identifier of the item to check.
+     * @return bool True if the item is in the container, false otherwise.
      */
-    public function isShared($abstract);
+    public function has(string $id): bool;
 
     /**
-     * Generate a new instance of the given abstract type.
-     *
-     * This is similar to `make` but always returns a new instance, bypassing any singleton or shared behavior.
-     *
-     * @param string $abstract The abstract type to create a new instance for.
-     * @return mixed Returns the new instance.
+     * Determine if a specific abstract type is shared in the container.
+     * 
+     * Checks if the specified abstract type is stored as a singleton or shared instance.
+     * 
+     * @param  string  $abstract The identifier of the abstract type.
+     * @return bool True if the type is shared, false otherwise.
      */
-    public function factory($abstract);
+    public function isShared(string $abstract): bool;
 
     /**
-     * Resolve the given abstract type from the container.
-     *
-     * This method performs the actual retrieval of an instance from the container.
-     *
-     * @param string $abstract The abstract type or alias to resolve.
-     * @param array $parameters Optional parameters to use during resolution.
-     * @return mixed Returns the resolved instance.
-     * @throws BindingResolutionException If the binding cannot be resolved.
+     * Get a closure to resolve a type from the container.
+     * 
+     * Returns a factory closure that can be used to create instances of the specified type.
+     * 
+     * @param  string  $abstract The identifier of the type.
+     * @return Closure The factory closure for the type.
      */
-    public function resolve($abstract, array $parameters = []);
+    public function factory(string $abstract): Closure;
+
+    /**
+     * Create an instance of a binding.
+     * 
+     * Resolves and returns an instance of the specified binding, injecting any dependencies.
+     * 
+     * @param string $abstract The identifier of the type to resolve.
+     * @param array $parameters Optional parameters for the resolution process.
+     * @return mixed The resolved instance.
+     * 
+     * @throws BindingResolutionException If there is an issue resolving the binding.
+     */
+    public function make(string $abstract, array $parameters = []): mixed;
+
+    /**
+     * Determine if a given abstract type has been resolved.
+     * 
+     * Checks if the specified abstract type has been previously resolved and is cached.
+     * 
+     * @param  string  $abstract The identifier of the type.
+     * @return bool True if the type has been resolved, false otherwise.
+     */
+    public function resolved(string $abstract): bool;
 }

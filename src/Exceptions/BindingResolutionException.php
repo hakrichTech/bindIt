@@ -1,6 +1,6 @@
 <?php
 
-namespace PHPShots\Common;
+namespace PHPShots\Common\Exceptions;
 
 use Exception;
 use Psr\Container\ContainerExceptionInterface;
