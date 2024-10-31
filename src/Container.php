@@ -18,7 +18,7 @@ use PHPShots\Common\Interfaces\ContextualBindingBuilderInterface;
  * @package PHPShots\Common
  * @version 0.1.1
  */
-abstract class Container extends BindIt implements ContainerInterface, TypeAliasInterface
+class Container extends BindIt implements ContainerInterface, TypeAliasInterface
 {
     use Contextual, Build;
 
@@ -42,6 +42,13 @@ abstract class Container extends BindIt implements ContainerInterface, TypeAlias
      * @var array[]
      */
     protected $extenders = [];
+
+    /**
+     * An array of the types that have been resolved.
+     *
+     * @var bool[]
+     */
+    protected $resolved = [];
 
     /**
      * Clears all stored instances from the container.
@@ -87,6 +94,141 @@ abstract class Container extends BindIt implements ContainerInterface, TypeAlias
     public static function setInstance(?ContainerInterface $container = null): ContainerInterface
     {
         return static::$instance = $container;
+    }
+
+
+    /**
+     * {@inheritdoc}
+     *
+     * @return bool
+     */
+    public function has(string $id): bool
+    {
+        return $this->bound($id);
+    }
+
+    /**
+     * Resolve the given type from the container.
+     *
+     * @param  string|callable  $abstract
+     * @param  array  $parameters
+     * @param  bool  $raiseEvents
+     * @return mixed
+     *
+     * @throws BindingResolutionException
+     * @throws CircularDependencyException
+     */
+    protected function resolve($abstract, $parameters = [])
+    {
+
+
+        $abstract = $this->getAlias($abstract);
+
+        $concrete = $this->getContextualConcrete($abstract);
+
+
+        $needsContextualBuild = !empty($parameters) || !is_null($concrete);
+
+        // If an instance of the type is currently being managed as a singleton we'll
+        // just return an existing instance instead of instantiating new store
+        // so the developer can keep using the same objects instance every time.
+        if (isset($this->store[$abstract]) && !$needsContextualBuild) {
+            return $this->store[$abstract];
+        }
+
+        $this->with[] = $parameters;
+
+        if (is_null($concrete)) {
+            $concrete = $this->getConcrete($abstract);
+        }
+
+
+        // We're ready to instantiate an instance of the concrete type registered for
+        // the binding. This will instantiate the types, as well as resolve any of
+        // its "nested" dependencies recursively until all have gotten resolved.
+        $object = $this->isBuildable($concrete, $abstract)
+            ? $this->build($concrete)
+            : $this->make($concrete);
+
+        // If we defined any extenders for this type, we'll need to spin through them
+        // and apply them to the object being built. This allows for the extension
+        // of services, such as changing configuration or decorating the object.
+        foreach ($this->getExtenders($abstract) as $extender) {
+            $object = $extender($object, $this);
+        }
+
+        // If the requested type is registered as a singleton we'll want to cache off
+        // the store in "memory" so we can return it later without creating an
+        // entirely new instance of an object on each subsequent request for it.
+        if ($this->isShared($abstract) && !$needsContextualBuild) {
+            $this->store[$abstract] = $object;
+        }
+
+
+        // Before returning, we will also set the resolved flag to "true" and pop off
+        // the parameter overrides for this build. After those two things are done
+        // we will be ready to return back the fully constructed class instance.
+        $this->resolved[$abstract] = true;
+
+        array_pop($this->with);
+
+        return $object;
+    }
+
+    /**
+     * Get the concrete type for a given abstract.
+     *
+     * @param  string|callable  $abstract
+     * @return mixed
+     */
+    protected function getConcrete($abstract)
+    {
+        // If we don't have a registered resolver or concrete for the type, we'll just
+        // assume each type is a concrete name and will attempt to resolve it as is
+        // since the container should be able to resolve concretes automatically.
+        if (isset($this->bindings[$abstract])) {
+            return $this->bindings[$abstract]['concrete'];
+        }
+
+        return $abstract;
+    }
+
+
+     /**
+     * Resolve the given type from the container.
+     *
+     * @param  string|callable  $abstract
+     * @param  array  $parameters
+     * @return mixed
+     *
+     * @throws BindingResolutionException
+     * @version 0.1.1
+     * 
+     */
+    public function make($abstract, array $parameters = []) : mixed
+    {
+        return $this->resolve($abstract, $parameters);
+    }
+
+    /**
+     * Get the Closure to be used when building a type.
+     *
+     * @param  string  $abstract
+     * @param  string  $concrete
+     * @return Closure
+     */
+    protected function getClosure($abstract, $concrete): Closure
+    {
+        return function (ContainerInterface $container, $parameters = []) use ($abstract, $concrete) {
+            if ($abstract == $concrete) {
+                return $container->build($concrete);
+            }
+
+            return $container->make(
+                $concrete,
+                $parameters,
+            );
+        };
     }
 
     /**
@@ -242,6 +384,17 @@ abstract class Container extends BindIt implements ContainerInterface, TypeAlias
         return $this[$key];
     }
 
+     /**
+     * Dynamically accesses container services.
+     *
+     * @param  string  $key  The key of the service to access.
+     * @return mixed
+     */
+    public function get($key)
+    {
+        return $this->__get($key);
+    }
+
     /**
      * Dynamically sets container services.
      *
@@ -286,9 +439,12 @@ abstract class Container extends BindIt implements ContainerInterface, TypeAlias
      */
     public function resolved($abstract): bool
     {
+
         if ($this->isAlias($abstract)) {
+
             $abstract = $this->getAlias($abstract);
         }
+
 
         return isset($this->resolved[$abstract]) || isset($this->store[$abstract]);
     }

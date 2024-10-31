@@ -78,15 +78,7 @@ interface ContainerInterface extends BindItInterface
      */
     public function addContextualBinding(string $concrete, string $abstract, Closure|string $implementation): void;
 
-    /**
-     * Drop stale bindings and aliases for a specific type.
-     * 
-     * Removes bindings or aliases for a given type, ensuring that it can be re-bound or re-resolved.
-     * 
-     * @param  string  $abstract The identifier of the type to drop.
-     * @return void
-     */
-    public function dropStore(string $abstract): void;
+    
 
     /**
      * Register an existing instance as shared in the container.

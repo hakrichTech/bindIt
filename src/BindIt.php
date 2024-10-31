@@ -61,10 +61,13 @@ abstract class BindIt extends TypeAlias implements BindItInterface
      */
     public function bind(string $abstract, \Closure|string|null $concrete = null, bool $shared = false): void
     {
+
         $this->dropStore($abstract);
 
         // If no concrete type was given, set it to the abstract type.
         $concrete = $concrete ?? $abstract;
+
+
 
         // Wrap the concrete type in a Closure if it's a string.
         if (is_string($concrete)) {
@@ -75,10 +78,13 @@ abstract class BindIt extends TypeAlias implements BindItInterface
 
         $this->bindings[$abstract] = ['concrete' => $concrete, 'shared' => $shared];
 
+
         // If the abstract type was already resolved, fire the rebound listener.
         if ($this->resolved($abstract)) {
+
             $this->rebound($abstract);
         }
+
     }
 
     /**
@@ -92,6 +98,7 @@ abstract class BindIt extends TypeAlias implements BindItInterface
      */
     public function singleton(string $abstract, \Closure|string|null $concrete = null): void
     {
+
         $this->bind($abstract, $concrete, true);
     }
 
