@@ -1,0 +1,46 @@
+{
+    "name": "phpshots/bind-it",
+    "description": "A binding component for PHP applications, enabling efficient registration and resolution of abstract types.",
+    "version": "0.1.1",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "PHPShots\\Common\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PHPShots\\Common\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Shamavu Rasheed",
+            "email": "hakimushamavu@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^7.4 || ^8.0",
+        "phpshots/common-type-alias": "^0.1.1",
+        "psr/container": "^2.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.5 || ^10.0"
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "license": "MIT",
+    "keywords": [
+        "binding",
+        "php",
+        "component",
+        "abstraction"
+    ],
+    "homepage": "https://github.com/phpshots/common",
+    "support": {
+        "issues": "https://github.com/phpshots/common/issues"
+    }
+}
