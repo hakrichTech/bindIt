@@ -4,6 +4,7 @@ namespace PHPShots\Common;
 
 use Closure;
 use PHPShots\Common\Traits\Build;
+use PHPShots\Common\Traits\CallBacks;
 use PHPShots\Common\Traits\Contextual;
 use PHPShots\Common\Interfaces\ContainerInterface;
 use PHPShots\Common\Interfaces\ContextualBindingBuilderInterface;
@@ -20,7 +21,7 @@ use PHPShots\Common\Interfaces\ContextualBindingBuilderInterface;
  */
 class Container extends BindIt implements ContainerInterface, TypeAliasInterface
 {
-    use Contextual, Build;
+    use Contextual, Build, CallBacks;
 
     /**
      * The container's shared store for storing resolved instances.
@@ -118,11 +119,18 @@ class Container extends BindIt implements ContainerInterface, TypeAliasInterface
      * @throws BindingResolutionException
      * @throws CircularDependencyException
      */
-    protected function resolve($abstract, $parameters = [])
+    protected function resolve($abstract, $parameters = [], $raiseEvents = true)
     {
 
 
         $abstract = $this->getAlias($abstract);
+
+        // First we'll fire any event handlers which handle the "before" resolving of
+        // specific types. This gives some hooks the chance to add various extends
+        // calls to change the resolution of objects that they're interested in.
+        if ($raiseEvents) {
+            $this->fireBeforeResolvingCallbacks($abstract, $parameters);
+        }
 
         $concrete = $this->getContextualConcrete($abstract);
 
@@ -164,6 +172,9 @@ class Container extends BindIt implements ContainerInterface, TypeAliasInterface
             $this->store[$abstract] = $object;
         }
 
+        if ($raiseEvents) {
+            $this->fireResolvingCallbacks($abstract, $object);
+        }
 
         // Before returning, we will also set the resolved flag to "true" and pop off
         // the parameter overrides for this build. After those two things are done
