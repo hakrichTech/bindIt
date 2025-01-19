@@ -133,23 +133,7 @@ abstract class BindIt extends TypeAlias implements BindItInterface
         }
     }
 
-    /**
-     * Bind a new callback to an abstract's rebind event.
-     *
-     * @param  string  $abstract
-     * @param  Closure  $callback
-     * @return mixed
-     *
-     * @version 0.1.1
-     */
-    public function rebinding(string $abstract, Closure $callback)
-    {
-        $this->reboundCallbacks[$abstract = $this->getAlias($abstract)][] = $callback;
-
-        if ($this->bound($abstract)) {
-            return $this->make($abstract);
-        }
-    }
+    
 
     /**
      * Bind a callback to resolve with Container::call.
@@ -181,16 +165,7 @@ abstract class BindIt extends TypeAlias implements BindItInterface
         }
     }
 
-    /**
-     * Get the rebound callbacks for a given type.
-     *
-     * @param  string  $abstract
-     * @return array
-     */
-    protected function getReboundCallbacks($abstract)
-    {
-        return $this->reboundCallbacks[$abstract] ?? [];
-    }
+    
 
     /**
      * Check if a binding exists.
