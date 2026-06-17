@@ -35,17 +35,12 @@ abstract class BindIt extends TypeAlias implements BindItInterface
     /**
      * The rebound callbacks.
      *
+     * Declared here (not in the CallBacks trait) because rebound() lives on this
+     * base class and must work even for subclasses that omit the trait.
+     *
      * @var array<string, Closure[]>
      */
     protected $reboundCallbacks = [];
-    
-
-    /**
-     * The resolved store.
-     *
-     * @var array<string, mixed>
-     */
-    protected $resolvedStore = [];
 
     /**
      * Register a binding with the container.

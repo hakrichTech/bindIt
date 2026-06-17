@@ -108,6 +108,13 @@ trait Build
             return $this->notInstantiable($concrete);
         }
 
+        if (in_array($concrete, $this->buildStack, true)) {
+            throw new CircularDependencyException(
+                'Circular dependency detected while building [' . $concrete . ']: '
+                . implode(' -> ', array_merge($this->buildStack, [$concrete])) . '.'
+            );
+        }
+
         $this->buildStack[] = $concrete;
         $constructor = $reflector->getConstructor();
 

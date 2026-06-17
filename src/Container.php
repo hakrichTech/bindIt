@@ -3,9 +3,13 @@
 namespace PHPShots\Common;
 
 use Closure;
+use Psr\Container\ContainerInterface as PsrContainerInterface;
 use PHPShots\Common\Traits\Build;
 use PHPShots\Common\Traits\CallBacks;
 use PHPShots\Common\Traits\Contextual;
+use PHPShots\Common\Exceptions\BindingResolutionException;
+use PHPShots\Common\Exceptions\CircularDependencyException;
+use PHPShots\Common\Exceptions\EntryNotFoundException;
 use PHPShots\Common\Interfaces\ContainerInterface;
 use PHPShots\Common\Interfaces\ContextualBindingBuilderInterface;
 
@@ -19,7 +23,7 @@ use PHPShots\Common\Interfaces\ContextualBindingBuilderInterface;
  * @package PHPShots\Common
  * @version 0.1.1
  */
-class Container extends BindIt implements ContainerInterface, TypeAliasInterface
+class Container extends BindIt implements ContainerInterface, TypeAliasInterface, PsrContainerInterface
 {
     use Contextual, Build, CallBacks;
 
@@ -398,12 +402,25 @@ class Container extends BindIt implements ContainerInterface, TypeAliasInterface
      /**
      * Dynamically accesses container services.
      *
-     * @param  string  $key  The key of the service to access.
+     * Resolve an entry by its identifier (PSR-11 compliant).
+     *
+     * @param  string  $id  The identifier of the entry to look for.
      * @return mixed
+     *
+     * @throws EntryNotFoundException  No entry was found for this identifier.
+     * @throws BindingResolutionException|CircularDependencyException  Error while resolving.
      */
-    public function get($key)
+    public function get(string $id): mixed
     {
-        return $this->__get($key);
+        try {
+            return $this->resolve($id);
+        } catch (BindingResolutionException | CircularDependencyException $e) {
+            if ($this->has($id)) {
+                throw $e;
+            }
+
+            throw new EntryNotFoundException($id, 0, $e);
+        }
     }
 
     /**

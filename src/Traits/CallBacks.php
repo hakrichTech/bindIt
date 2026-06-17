@@ -7,13 +7,6 @@ use Closure;
 trait CallBacks
 {
     /**
-     * All of the registered rebound callbacks.
-     *
-     * @var array[]
-     */
-    protected $reboundCallbacks = [];
-
-    /**
      * All of the global before resolving callbacks.
      *
      * @var \Closure[]
